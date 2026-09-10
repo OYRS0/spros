@@ -82,6 +82,7 @@ export function MapView({
           minZoom: 5,
           maxZoom: 19,
         }).setView([center.lat, center.lng], compact ? 15 : 13);
+        m.attributionControl.setPrefix(false);
         map.current = m;
         const tiles = L.tileLayer(mapConfig.tileUrl, {
           maxZoom: 19,
