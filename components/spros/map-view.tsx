@@ -18,6 +18,7 @@ import { categoryById, formatNumber } from "@/lib/domain/catalog";
 import type { Demand, Point } from "@/lib/domain/types";
 import "leaflet/dist/leaflet.css";
 import { mapConfig } from "@/lib/domain/map-config";
+import { moveMapCamera } from "@/lib/map-camera";
 
 export const initialCenter = { lat: 55.766, lng: 37.497 };
 export function MapView({
@@ -102,7 +103,11 @@ export function MapView({
           if (current.current.selecting)
             current.current.onPoint?.({ lat: e.latlng.lat, lng: e.latlng.lng });
         });
-        resize = new ResizeObserver(() => m.invalidateSize());
+        resize = new ResizeObserver(() => {
+          // A mobile list/map switch can hide the map during an animation.
+          m.stop();
+          m.invalidateSize({ pan: false });
+        });
         resize.observe(container.current);
         setReady(true);
       })
@@ -117,10 +122,8 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    if (ready)
-      map.current?.flyTo([center.lat, center.lng], compact ? 15 : 14, {
-        duration: 0.65,
-      });
+    if (ready && map.current)
+      moveMapCamera(map.current, [center.lat, center.lng], compact ? 15 : 14);
   }, [center.lat, center.lng, ready, compact]);
   useEffect(() => {
     const L = library.current,
@@ -248,7 +251,8 @@ export function MapView({
     }
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        map.current?.flyTo([p.coords.latitude, p.coords.longitude], 14);
+        if (map.current)
+          moveMapCamera(map.current, [p.coords.latitude, p.coords.longitude], 14);
         if (selecting)
           onPoint?.({ lat: p.coords.latitude, lng: p.coords.longitude });
       },
