@@ -256,7 +256,7 @@ export function SprosApp() {
   };
   const filterCount = Object.values(filters).filter(Boolean).length;
   return (
-    <div className="spros-app">
+    <div className={`spros-app ${mobileMap ? "is-map-view" : "is-list-view"}`}>
       <header className="app-header">
         <a className="brand" href="/" aria-label="SPROS, главная">
           <span className="brand-mark">s</span>

@@ -547,3 +547,37 @@ textarea:focus {
     transition: none !important;
   }
 }
+
+/* Keep Leaflet and map controls below portalled sheets, dialogs and pickers. */
+.spros-app {
+  position: relative;
+  isolation: isolate;
+  z-index: 0;
+}
+@media (max-width: 760px) {
+  /* One mobile scroll surface includes the heading, filters and every card. */
+  .spros-app.is-list-view {
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .is-list-view .workspace {
+    display: block;
+    flex: none;
+  }
+  .is-list-view .request-sidebar {
+    display: block;
+    min-height: auto;
+  }
+  .is-list-view .request-list {
+    flex: none;
+    overflow: visible;
+  }
+  .is-list-view .mobile-dock {
+    position: fixed;
+  }
+  .is-list-view .list-ending {
+    padding-bottom: calc(130px + env(safe-area-inset-bottom));
+  }
+}
