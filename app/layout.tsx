@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./pilot.css";
 
 export const metadata: Metadata = {
   title: "SPROS — карта локального спроса",

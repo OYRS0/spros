@@ -142,6 +142,7 @@ try {
   });
   data = await call("/api/requests");
   assert.equal(data.requests.find((r) => r.id === created.id).votes, 1);
+  assert.equal(data.requests.find((r) => r.id === created.id).isDemo, false);
   await call("/api/actions", {
     user: "qa-neighbor",
     body: { action: "support", requestId: created.id, pledge: 0 },
@@ -213,11 +214,29 @@ try {
       targetId: "d1",
       reason: "Запросы об одном формате в одном месте объединены",
     },
+    expected: 409,
+  });
+  const target = await call("/api/requests", {
+    user: "qa-neighbor",
+    body: { ...newRequest, confirmedDistinct: true },
+    expected: 201,
+  });
+  await call("/api/actions", {
+    body: { action: "support", requestId: target.id, pledge: 5000 },
+  });
+  await call("/api/moderation", {
+    user: "qa-moderator",
+    body: {
+      requestId: created.id,
+      status: "merged",
+      targetId: target.id,
+      reason: "Запросы об одном формате в одном месте объединены",
+    },
   });
   data = await call("/api/requests");
-  restaurant = data.requests.find((r) => r.id === "d1");
-  assert.equal(restaurant.votes, 649);
-  assert.equal(restaurant.myPledge, 5000);
+  const combined = data.requests.find((r) => r.id === target.id);
+  assert.equal(combined.votes, 2);
+  assert.equal(combined.myPledge, 5000);
   const offerBody = {
     requestId: null,
     title: "Тестовая кофейня",
@@ -338,6 +357,110 @@ try {
   });
   assert.equal(badImage.status, 400);
   checks++;
+  // Private business data and admin actions must remain inaccessible to residents.
+  await call("/api/admin", { user: null, expected: 401 });
+  await call("/api/admin", { expected: 403 });
+  await call("/api/business-profile", { user: null, expected: 401 });
+  const businessBody = {
+    legalName: "ИП Тестовый предприниматель",
+    inn: "1234567890",
+    contact: "owner@example.test",
+    about: "Команда с опытом запуска семейных кафе.",
+  };
+  await call("/api/business-profile", { body: businessBody });
+  assert.equal(
+    (await call("/api/business-profile", { user: "qa-neighbor" })).business,
+    null,
+  );
+  const decision = {
+    action: "verify_business",
+    target: "qa-resident",
+    reason: "Документы и контакт проверены организатором",
+  };
+  await call("/api/admin", { body: decision, expected: 403 });
+  await call("/api/admin", { user: "qa-moderator", body: decision });
+  assert.equal(
+    (await call("/api/business-profile")).business.status,
+    "verified",
+  );
+  await call("/api/business-profile", {
+    body: { ...businessBody, contact: "changed@example.test" },
+  });
+  assert.equal(
+    (await call("/api/business-profile")).business.status,
+    "pending",
+  );
+  const session = "63d24985-7f4e-48cb-b733-ef103d15d3cf";
+  await call("/api/events", {
+    user: null,
+    body: { session, event: "map_view", entity: "" },
+  });
+  await call("/api/events", {
+    user: null,
+    body: { session, event: "map_view", entity: "" },
+  });
+  await call("/api/events", {
+    user: null,
+    body: { session, event: "signin_complete", entity: "" },
+    expected: 401,
+  });
+  await call("/api/events", {
+    user: null,
+    body: { session, event: "map_view", entity: "" },
+    headers: { Origin: "https://foreign.test" },
+    expected: 403,
+  });
+  const admin = await call("/api/admin", { user: "qa-moderator" });
+  assert.equal(admin.funnel.find((f) => f.event === "map_view").sessions, 1);
+  assert.equal(admin.counts.demo_requests, 14);
+  assert(admin.counts.live_requests > 0);
+  assert.equal(admin.events.length, 1);
+  const queue = await call("/api/moderation", { user: "qa-moderator" });
+  assert(queue.history.length > 0);
+  const report = queue.reports[0];
+  assert(report);
+  await call("/api/moderation", {
+    user: "qa-moderator",
+    body: {
+      action: "dismiss_report",
+      reportId: report.id,
+      reason: "После проверки содержание не нарушает правила",
+    },
+  });
+  assert(
+    !(await call("/api/moderation", { user: "qa-moderator" })).reports.some(
+      (r) => r.id === report.id,
+    ),
+  );
+  await call("/api/admin", {
+    user: "qa-moderator",
+    body: {
+      action: "suspend",
+      target: "qa-neighbor",
+      reason: "Подтверждён спам в тестовом сценарии",
+    },
+  });
+  await call("/api/actions", {
+    user: "qa-neighbor",
+    body: { action: "support", requestId: target.id, pledge: 0 },
+    expected: 403,
+  });
+  assert.equal(
+    (await call("/api/requests", { user: "qa-neighbor" })).profile,
+    null,
+  );
+  await call("/api/admin", {
+    user: "qa-moderator",
+    body: {
+      action: "restore",
+      target: "qa-neighbor",
+      reason: "Ограничение снято по результатам проверки",
+    },
+  });
+  await call("/api/actions", {
+    user: "qa-neighbor",
+    body: { action: "support", requestId: target.id, pledge: 0 },
+  });
   console.log(
     `PASS: ${checks} Worker requests; SSR, auth, votes, pledges, duplicates, reports, appeals, merge deduplication, offers, concept choice, interest, rate limits, foreign keys.`,
   );

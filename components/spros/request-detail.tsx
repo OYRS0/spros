@@ -147,7 +147,9 @@ export function RequestDetail({
                 <div className="detail-category">
                   <CategoryIcon id={r.category} boxed />
                   {categoryById(r.category).label}
-                  <span className="detail-demo">Демо</span>
+                  <span className="detail-demo">
+                    {r.isDemo ? "Демо" : "От участника"}
+                  </span>
                 </div>
                 <SheetTitle>{r.title}</SheetTitle>
                 <SheetDescription>
@@ -167,8 +169,10 @@ export function RequestDetail({
                   </div>
                 </div>
                 <p className="detail-note">
-                  Демонстрационные показатели.{" "}
-                  {r.testVotes > 0
+                  {r.isDemo
+                    ? "Демонстрационные показатели. "
+                    : "Голоса участников пилота. "}
+                  {r.isDemo && r.testVotes > 0
                     ? `Включая ${r.testVotes} голосов участников теста. `
                     : ""}
                   Деньги не собираются. Готовность внести не гарантирует

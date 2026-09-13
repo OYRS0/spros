@@ -35,6 +35,7 @@ export async function identity(required = false): Promise<Profile | null> {
       residency_verified_at: number | null;
       suspended: number;
     }>();
+  if ((!row || row.suspended) && !required) return null;
   if (!row || row.suspended)
     throw new HttpError(
       "Действия аккаунта временно ограничены. Обратитесь к организатору пилота.",

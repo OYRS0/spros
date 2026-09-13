@@ -16,10 +16,10 @@ export async function GET() {
     if (!u.moderator)
       throw new HttpError("Доступ только для назначенного модератора.", 403);
     const db = database();
-    const [requests, reports, appeals] = await Promise.all([
+    const [requests, reports, appeals, history] = await Promise.all([
       db
         .prepare(
-          "SELECT id,title,category,location,status,reason,owner_id FROM requests ORDER BY created_at DESC LIMIT 500",
+          "SELECT id,title,category,location,status,reason,owner_id,description,is_demo FROM requests ORDER BY created_at DESC LIMIT 500",
         )
         .all(),
       db
@@ -32,12 +32,18 @@ export async function GET() {
           "SELECT id,request_id,text,status,created_at FROM appeals WHERE status='open' ORDER BY created_at DESC LIMIT 200",
         )
         .all(),
+      db
+        .prepare(
+          "SELECT e.*,r.title FROM moderation_events e JOIN requests r ON r.id=e.request_id ORDER BY e.created_at DESC LIMIT 100",
+        )
+        .all(),
     ]);
     return Response.json(
       {
         requests: requests.results,
         reports: reports.results,
         appeals: appeals.results,
+        history: history.results,
       },
       { headers: { "Cache-Control": "private,no-store" } },
     );
@@ -53,6 +59,42 @@ export async function POST(request: Request) {
       throw new HttpError("Доступ только для назначенного модератора.", 403);
     await rateLimit(u.id, "moderate", 100);
     const body = await readBody(request);
+    if (body?.action === "dismiss_report") {
+      const a = z
+        .object({
+          reportId: z.string().min(1).max(100),
+          reason: z.string().trim().min(10).max(1000),
+        })
+        .parse(body);
+      const db = database();
+      const report = await db
+        .prepare(
+          "SELECT q.request_id,r.status FROM reports q JOIN requests r ON r.id=q.request_id WHERE q.id=? AND q.status='open'",
+        )
+        .bind(a.reportId)
+        .first<{ request_id: string; status: string }>();
+      if (!report)
+        throw new HttpError("Жалоба уже рассмотрена или не найдена.", 409);
+      await db.batch([
+        db
+          .prepare("UPDATE reports SET status='resolved' WHERE id=?")
+          .bind(a.reportId),
+        db
+          .prepare(
+            "INSERT INTO moderation_events (id,request_id,actor_id,from_status,to_status,reason,created_at) VALUES (?,?,?,?,?,?,?)",
+          )
+          .bind(
+            crypto.randomUUID(),
+            report.request_id,
+            u.id,
+            report.status,
+            report.status,
+            `Жалоба отклонена: ${a.reason}`,
+            Date.now(),
+          ),
+      ]);
+      return Response.json({ ok: true });
+    }
     if (body?.action === "reject_appeal") {
       const rejection = z
         .object({
@@ -99,9 +141,9 @@ export async function POST(request: Request) {
       .parse(body);
     const db = database();
     const r = await db
-      .prepare("SELECT id,status FROM requests WHERE id=?")
+      .prepare("SELECT id,status,is_demo FROM requests WHERE id=?")
       .bind(a.requestId)
-      .first<{ id: string; status: ModerationStatus }>();
+      .first<{ id: string; status: ModerationStatus; is_demo: number }>();
     if (!r) throw new HttpError("Запрос не найден.", 404);
     if (!canTransition(r.status, a.status))
       throw new HttpError("Этот переход статуса недоступен.", 409);
@@ -111,11 +153,16 @@ export async function POST(request: Request) {
         throw new HttpError("Выберите другой запрос для объединения.");
       const target = await db
         .prepare(
-          "SELECT id FROM requests WHERE id=? AND status IN ('published','review','restored')",
+          "SELECT id,is_demo FROM requests WHERE id=? AND status IN ('published','review','restored')",
         )
         .bind(a.targetId)
         .first();
       if (!target) throw new HttpError("Целевой запрос недоступен.", 409);
+      if (target.is_demo !== r.is_demo)
+        throw new HttpError(
+          "Демонстрационные запросы нельзя объединять с запросами участников.",
+          409,
+        );
       changes.push(
         db
           .prepare(

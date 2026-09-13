@@ -12,13 +12,16 @@ type Row = {
   location: string;
   status: ModerationStatus;
   reason: string | null;
+  description: string;
+  is_demo: number;
 };
 type Data = {
   requests: Row[];
+  history: { id: string; title: string; reason: string; created_at: number }[];
   reports: { id: string; request_id: string; reason: string; detail: string }[];
   appeals: { id: string; request_id: string; text: string }[];
 };
-export function Moderation() {
+export function Moderation({ embedded = false }: { embedded?: boolean }) {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState("");
@@ -27,6 +30,7 @@ export function Moderation() {
   const [target, setTarget] = useState("");
   const [busy, setBusy] = useState(false);
   const [rejectId, setRejectId] = useState<string | null>(null);
+  const [dismissId, setDismissId] = useState<string | null>(null);
   const [rejection, setRejection] = useState("");
   const [rejectError, setRejectError] = useState("");
   const refresh = useCallback(async () => {
@@ -65,11 +69,12 @@ export function Moderation() {
     setRejectError("");
     try {
       await api("/api/moderation", {
-        action: "reject_appeal",
-        appealId: rejectId,
+        action: dismissId ? "dismiss_report" : "reject_appeal",
+        ...(dismissId ? { reportId: dismissId } : { appealId: rejectId }),
         reason: rejection,
       });
       setRejectId(null);
+      setDismissId(null);
       setRejection("");
       await refresh();
     } catch (e) {
@@ -79,17 +84,19 @@ export function Moderation() {
     }
   }
   return (
-    <div className="policy-page">
-      <header className="simple-header">
-        <a href="/" className="brand">
-          SPROS.
-        </a>
-        <a href="/account">
-          <ArrowLeft size={17} />
-          Профиль
-        </a>
-      </header>
-      <main className="reading-column">
+    <div className={embedded ? "embedded-moderation" : "policy-page"}>
+      {!embedded && (
+        <header className="simple-header">
+          <a href="/" className="brand">
+            SPROS.
+          </a>
+          <a href="/account">
+            <ArrowLeft size={17} />
+            Профиль
+          </a>
+        </header>
+      )}
+      <section className="reading-column">
         <h1>Проверка нарушений</h1>
         <p>
           Содержание идеи, популярность и критика бизнеса не являются
@@ -121,6 +128,16 @@ export function Moderation() {
                   }}
                 >
                   Рассмотреть запрос
+                </button>
+                <button
+                  className="btn text-btn"
+                  onClick={() => {
+                    setDismissId(q.id);
+                    setRejection("");
+                    setRejectError("");
+                  }}
+                >
+                  Нарушения нет
                 </button>
               </div>
             ))}
@@ -178,7 +195,12 @@ export function Moderation() {
             {r && (
               <form className="moderation-card form-fields" onSubmit={submit}>
                 <h3>{r.title}</h3>
+                <p>
+                  {r.location} · {r.is_demo ? "Демо" : "Запрос участника"}
+                </p>
+                <p style={{ whiteSpace: "pre-wrap" }}>{r.description}</p>
                 <p>Сейчас: {statusLabels[r.status]}</p>
+                {r.reason && <p>Предыдущее решение: {r.reason}</p>}
                 <label>
                   Решение
                   <Choice
@@ -205,6 +227,7 @@ export function Moderation() {
                           .filter(
                             (t) =>
                               t.id !== r.id &&
+                              t.is_demo === r.is_demo &&
                               ["published", "review", "restored"].includes(
                                 t.status,
                               ),
@@ -234,18 +257,29 @@ export function Moderation() {
                 </button>
               </form>
             )}
+            <h2>История решений</h2>
+            {data.history.map((e) => (
+              <article className="audit-row" key={e.id}>
+                <b>{e.title}</b>
+                <p>{e.reason}</p>
+                <small>{new Date(e.created_at).toLocaleString("ru-RU")}</small>
+              </article>
+            ))}
           </>
         )}
-      </main>
+      </section>
       <Modal
-        open={!!rejectId}
-        onClose={() => setRejectId(null)}
-        title="Решение по апелляции"
-        description="Автор увидит это объяснение в профиле. Укажите конкретное нарушение."
+        open={!!rejectId || !!dismissId}
+        onClose={() => {
+          setRejectId(null);
+          setDismissId(null);
+        }}
+        title={dismissId ? "Закрыть жалобу" : "Решение по апелляции"}
+        description="Объясните решение. Оно сохранится в истории модерации."
       >
         <div className="form-fields">
           <label>
-            Причина отказа
+            Основание решения
             <textarea
               value={rejection}
               onChange={(e) => setRejection(e.target.value)}
@@ -260,7 +294,7 @@ export function Moderation() {
           className="btn primary"
           onClick={rejectAppeal}
         >
-          Сохранить отказ
+          Сохранить решение
         </button>
       </Modal>
     </div>

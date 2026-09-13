@@ -22,7 +22,9 @@ export function DemandCard({
         <CategoryIcon id={r.category} boxed />
         <span>{categoryById(r.category).label}</span>
         {r.votes >= 300 ? (
-          <span className="hot-label">Высокий спрос</span>
+          <span className="hot-label">
+            {r.isDemo ? "Демо · высокий спрос" : "Высокий спрос"}
+          </span>
         ) : r.isDemo ? (
           <span className="demo-tiny">Демо</span>
         ) : null}

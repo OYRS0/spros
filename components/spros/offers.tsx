@@ -42,7 +42,7 @@ export function OfferCard({
         <span>
           {o.requestId ? "В ответ на спрос жителей" : "Идея предпринимателя"}
         </span>
-        <span className="demo-tiny">Демо</span>
+        <span className="demo-tiny">{o.isDemo ? "Демо" : "Участник"}</span>
       </div>
       <h3>{o.title}</h3>
       <p>{o.description}</p>
@@ -111,7 +111,11 @@ export function OfferDetail({
       open={!!o}
       onClose={onClose}
       title={o?.title ?? "Предложение бизнеса"}
-      description={o ? `ЖК «${o.location}» · демонстрационная концепция` : ""}
+      description={
+        o
+          ? `ЖК «${o.location}» · ${o.isDemo ? "демонстрационная концепция" : "предложение участника"}`
+          : ""
+      }
       wide
     >
       {o && (
@@ -289,8 +293,8 @@ export function CompareOffers({
         </Table>
       </div>
       <p className="form-hint">
-        Все концепции и финансовые показатели демонстрационные. Выбор не создаёт
-        обязательств по оплате.
+        Примеры отмечены «Демо». Заявленные суммы не являются платежами. Выбор
+        не создаёт обязательств по оплате.
       </p>
       {error && <p className="form-error">{error}</p>}
     </Modal>
@@ -543,9 +547,8 @@ export function CreateOffer({
           />
         </label>
         <p className="form-hint">
-          Это демонстрация предложения, без сбора денег и продажи долей. Не
-          обещайте гарантированную доходность и не публикуйте чужие личные
-          данные.
+          Это публикация концепции без сбора денег и продажи долей. Не обещайте
+          гарантированную доходность и не публикуйте чужие личные данные.
         </p>
         {error && (
           <p className="form-error" role="alert">

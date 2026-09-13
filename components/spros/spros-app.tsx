@@ -38,6 +38,7 @@ import { CreateOffer, OfferCard, OfferDetail } from "./offers";
 import { registerSprosTools } from "./webmcp";
 
 import { api } from "@/lib/client";
+import { track } from "@/lib/analytics";
 const defaultFilters: BusinessFilters = {
   minVotes: 0,
   maxCheck: 0,
@@ -58,7 +59,7 @@ export function SprosApp() {
   const [location, setLocation] = useState("all");
   const [sort, setSort] = useState("popular");
   const [onlyHot, setOnlyHot] = useState(false);
-  const [mobileMap, setMobileMap] = useState(false);
+  const [mobileMap, setMobileMap] = useState(true);
   const [listTab, setListTab] = useState("demands");
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
@@ -68,6 +69,8 @@ export function SprosApp() {
     undefined,
   );
   const [login, setLogin] = useState(false);
+  const [intent, setIntent] = useState("");
+  const [scope, setScope] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState(defaultFilters);
   const [locationModal, setLocationModal] = useState(false);
@@ -76,6 +79,22 @@ export function SprosApp() {
       setError("");
       const d = await api<Dataset>("/api/requests");
       setData(d);
+      if (
+        d.profile &&
+        new URLSearchParams(window.location.search).get("resume")
+      ) {
+        const params = new URLSearchParams(window.location.search);
+        const resume = params.get("resume");
+        if (resume === "create") setAddRequest(true);
+        if (resume === "business") setOfferFor(null);
+        if (params.get("offer"))
+          setSelectedOffer(
+            d.offers.find((o) => o.id === params.get("offer")) ?? null,
+          );
+        track("signin_complete", params.get("request") ?? "");
+        params.delete("resume");
+        window.history.replaceState(null, "", `/?${params}`);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -84,6 +103,7 @@ export function SprosApp() {
   }, []);
   useEffect(() => {
     void refresh();
+    track("map_view");
     const p = new URLSearchParams(window.location.search);
     setSelected(p.get("request"));
     if (p.get("mode") === "business") setMode("business");
@@ -103,8 +123,10 @@ export function SprosApp() {
       }),
     [refresh],
   );
-  const requireAccount = () => {
+  const requireAccount = (next = "support") => {
     if (data.profile) return true;
+    setIntent(next);
+    track("signin_start", selected ?? selectedOffer?.id ?? "");
     setLogin(true);
     return false;
   };
@@ -117,6 +139,9 @@ export function SprosApp() {
   const visible = useMemo(
     () =>
       data.requests
+        .filter(
+          (r) => scope === "all" || (scope === "demo" ? r.isDemo : !r.isDemo),
+        )
         .filter((r) => ["published", "review", "restored"].includes(r.status))
         .filter((r) => category === "all" || r.category === category)
         .filter((r) => location === "all" || r.location === location)
@@ -143,6 +168,7 @@ export function SprosApp() {
         ),
     [
       data.requests,
+      scope,
       category,
       location,
       query,
@@ -154,6 +180,7 @@ export function SprosApp() {
     ],
   );
   const offers = data.offers
+    .filter((o) => scope === "all" || (scope === "demo" ? o.isDemo : !o.isDemo))
     .filter(
       (o) =>
         (category === "all" || o.category === category) &&
@@ -208,6 +235,7 @@ export function SprosApp() {
       setSelectedOffer(data.offers.find((o) => o.id === r.id.slice(6)) ?? null);
       return;
     }
+    track("request_view", r.id);
     setSelected(r.id);
     window.history.replaceState(
       null,
@@ -276,7 +304,7 @@ export function SprosApp() {
           <button
             className="btn primary header-add"
             onClick={() => {
-              if (requireAccount())
+              if (requireAccount(mode === "business" ? "business" : "create"))
                 mode === "business" ? setOfferFor(null) : setAddRequest(true);
             }}
           >
@@ -309,12 +337,26 @@ export function SprosApp() {
       <div className="demo-banner">
         <Info size={14} />
         <span>
-          <b>Пилот SPROS.</b> Запросы, предложения и показатели —
-          демонстрационные. Платежей нет.
+          <b>Пилот SPROS.</b> Примеры отмечены «Демо». Новые запросы — от
+          участников. Без платежей.
         </span>
         <a href="/rules#pilot">
           О пилоте <ArrowUpRight size={13} />
         </a>
+      </div>
+      <div className="scope-bar">
+        <span>На карте</span>
+        <Choice
+          label="Источник запросов"
+          value={scope}
+          onChange={setScope}
+          options={[
+            { value: "all", label: "Все запросы" },
+            { value: "live", label: "От участников" },
+            { value: "demo", label: "Демонстрация" },
+          ]}
+        />
+        <span className="scope-count">{visible.length} запросов</span>
       </div>
       <main className={`workspace ${mobileMap ? "mobile-show-map" : ""}`}>
         <aside className="request-sidebar">
@@ -450,7 +492,7 @@ export function SprosApp() {
             <div className="list-ending">
               {loading
                 ? "Обновляем карту…"
-                : "Все показатели относятся к демонстрации."}
+                : "Выберите запрос или предложите свой."}
             </div>
           </div>
           <div className="sidebar-footer">
@@ -459,6 +501,21 @@ export function SprosApp() {
           </div>
         </aside>
         <section className="map-section" aria-label="Карта">
+          <div className="map-search">
+            <Search size={20} />
+            <input
+              aria-label="Поиск на карте"
+              placeholder="Что нужно вашему району?"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <button
+              aria-label="Фильтры карты"
+              onClick={() => setShowFilters(true)}
+            >
+              <SlidersHorizontal size={20} />
+            </button>
+          </div>
           <MapView
             kind={listTab === "offers" ? "offers" : "demands"}
             requests={mapRequests}
@@ -467,23 +524,33 @@ export function SprosApp() {
             center={center}
           />
         </section>
-        <button
-          className="mobile-view-toggle"
-          onClick={() => setMobileMap(!mobileMap)}
-        >
-          {mobileMap ? <List size={18} /> : <Map size={18} />}{" "}
-          {mobileMap ? "Список запросов" : "На карту"}
-        </button>
-        <button
-          className="mobile-add"
-          aria-label="Добавить запрос или бизнес"
-          onClick={() => {
-            if (requireAccount())
-              mode === "business" ? setOfferFor(null) : setAddRequest(true);
-          }}
-        >
-          <Plus size={22} />
-        </button>
+        <div className="mobile-dock">
+          <Tabs
+            value={mobileMap ? "map" : "list"}
+            onValueChange={(v) => setMobileMap(v === "map")}
+          >
+            <TabsList aria-label="Способ просмотра">
+              <TabsTrigger value="map">
+                <Map size={19} />
+                Карта
+              </TabsTrigger>
+              <TabsTrigger value="list">
+                <List size={19} />
+                Список
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <button
+            className="btn primary"
+            onClick={() => {
+              if (requireAccount(mode === "business" ? "business" : "create"))
+                mode === "business" ? setOfferFor(null) : setAddRequest(true);
+            }}
+          >
+            <Plus size={20} />
+            <span>{mode === "business" ? "Бизнес" : "Запрос"}</span>
+          </button>
+        </div>
       </main>
       <RequestDetail
         request={current ?? null}
@@ -550,7 +617,7 @@ export function SprosApp() {
         open={login}
         onClose={() => setLogin(false)}
         title="Один аккаунт — один голос"
-        description="Войдите, чтобы поддерживать запросы, добавлять свои и предлагать бизнес."
+        description="Карта открыта для всех. Войдите, чтобы ваш голос сохранился и учитывался один раз."
       >
         <div className="auth-note">
           <UserRound size={28} />
@@ -561,7 +628,7 @@ export function SprosApp() {
         </div>
         <a
           className="btn primary full-width"
-          href={`/signin-with-chatgpt?return_to=${encodeURIComponent(selected ? `/?request=${selected}` : "/")}`}
+          href={`/signin-with-chatgpt?return_to=${encodeURIComponent(`/?resume=${intent || "support"}${selected ? `&request=${encodeURIComponent(selected)}` : ""}${selectedOffer ? `&offer=${encodeURIComponent(selectedOffer.id)}` : ""}`)}`}
           target="_top"
         >
           Войти через ChatGPT <ArrowUpRight size={17} />

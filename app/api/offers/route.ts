@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         o.avgCheck,
         o.photoKey,
         user.id,
-        1,
+        0,
         Date.now(),
       )
       .run();

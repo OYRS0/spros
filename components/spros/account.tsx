@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import type { Dataset, Demand } from "@/lib/domain/types";
 import { statusLabels, locations, rubles } from "@/lib/domain/catalog";
+import { BusinessProfile } from "./business-profile";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/client";
 import { Choice, Modal } from "./fields";
 type AccountData = Dataset & {
@@ -24,6 +26,7 @@ type AccountData = Dataset & {
 };
 export function Account() {
   const [data, setData] = useState<AccountData | null>(null);
+  const [tab, setTab] = useState("requests");
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [district, setDistrict] = useState("");
@@ -114,7 +117,8 @@ export function Account() {
               </div>
               <div>
                 <h2>{p.name}</h2>
-                <p>Участник тестового пилота</p>
+                <p>Участник пилота</p>
+                <p className="profile-id">ID аккаунта: {p.id}</p>
                 <div className="verification-list">
                   <span>Аккаунт: вход подтверждён</span>
                   <span>
@@ -162,7 +166,15 @@ export function Account() {
                 {saving ? "Сохраняем…" : "Сохранить профиль"}
               </button>
             </form>
-            <section className="account-section">
+            <Tabs className="account-tabs" value={tab} onValueChange={setTab}>
+              <TabsList>
+                <TabsTrigger value="requests">Мои запросы</TabsTrigger>
+                <TabsTrigger value="support">Я поддержал</TabsTrigger>
+                <TabsTrigger value="offers">Предложения</TabsTrigger>
+                <TabsTrigger value="business">Мой бизнес</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <section className="account-section" hidden={tab !== "requests"}>
               <h2>Мои запросы</h2>
               {data.requests.filter((r) => r.ownerId === p.id).length === 0 ? (
                 <p>
@@ -178,7 +190,8 @@ export function Account() {
                         <a href={`/?request=${r.id}`}>{r.title}</a>
                       </h3>
                       <p>
-                        ЖК «{r.location}» · {r.votes} голосов · демонстрация
+                        ЖК «{r.location}» · {r.votes} голосов ·{" "}
+                        {r.isDemo ? "демонстрация" : "от участников"}
                       </p>
                       <span className={`status-chip ${r.status}`}>
                         {statusLabels[r.status]}
@@ -230,7 +243,7 @@ export function Account() {
                   ))
               )}
             </section>
-            <section className="account-section">
+            <section className="account-section" hidden={tab !== "support"}>
               <h2>Я поддержал</h2>
               {data.requests.filter((r) => r.supported).length === 0 ? (
                 <p>Пока нет поддержанных запросов.</p>
@@ -252,14 +265,17 @@ export function Account() {
                             : "Только голос"}
                         </p>
                         <span className="status-chip">
-                          Демонстрация · без платежа
+                          {r.isDemo ? "Демонстрация · " : ""}Без платежа
                         </span>
+                        <p style={{ color: "var(--primary)", marginTop: 12 }}>
+                          Изменить готовность →
+                        </p>
                       </a>
                     ))}
                 </div>
               )}
             </section>
-            <section className="account-section">
+            <section className="account-section" hidden={tab !== "offers"}>
               <h2>Мои бизнес-концепции и заявки</h2>
               {!data.offers.length ? (
                 <p>Пока нет предложений и заявок об интересе.</p>
@@ -267,7 +283,12 @@ export function Account() {
                 data.offers.map((o) => (
                   <div className="account-item" key={o.id}>
                     <h3>{o.title}</h3>
-                    <p>ЖК «{o.location}» · демонстрационная концепция</p>
+                    <p>
+                      ЖК «{o.location}» ·{" "}
+                      {o.isDemo
+                        ? "демонстрационная концепция"
+                        : "предложение участника"}
+                    </p>
                     <p>
                       {o.ownerId === p.id
                         ? "Ваше предложение"
@@ -303,6 +324,9 @@ export function Account() {
                 ))
               )}
             </section>
+            <section className="account-section" hidden={tab !== "business"}>
+              <BusinessProfile />
+            </section>
             {!!data.events.length && (
               <section className="account-section">
                 <h2>История модерации</h2>
@@ -318,9 +342,9 @@ export function Account() {
               </section>
             )}
             {p.moderator && (
-              <a href="/moderation" className="btn secondary">
+              <a href="/admin" className="btn secondary">
                 <ShieldCheck size={17} />
-                Открыть модерацию
+                Управление пилотом
               </a>
             )}
             <p style={{ marginTop: 30 }}>

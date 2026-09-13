@@ -31,7 +31,7 @@ export function registerSprosTools(actions: {
       name: "read_spros_requests",
       title: "Запросы SPROS",
       description:
-        "Read the map's requests. All current numbers are demonstration data, not traction.",
+        "Read the map's requests. Records with isDemo=true are demonstration data, not traction. Other records contain participant activity.",
       inputSchema: {
         type: "object",
         properties: {},

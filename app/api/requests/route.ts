@@ -56,7 +56,7 @@ export async function POST(request: Request) {
           JSON.stringify(r.needs),
           r.avgCheck,
           user.id,
-          1,
+          0,
           "published",
           now,
         ),

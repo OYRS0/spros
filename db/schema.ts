@@ -188,3 +188,40 @@ export const media = sqliteTable("media", {
   size: integer("size").notNull(),
   createdAt: integer("created_at").notNull(),
 });
+
+export const businessProfiles = sqliteTable("business_profiles", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id),
+  legalName: text("legal_name").notNull(),
+  inn: text("inn").notNull(),
+  contact: text("contact").notNull(),
+  about: text("about").notNull(),
+  status: text("status").notNull().default("pending"),
+  reason: text("reason"),
+  updatedAt: integer("updated_at").notNull(),
+});
+export const pilotEvents = sqliteTable(
+  "pilot_events",
+  {
+    session: text("session").notNull(),
+    event: text("event").notNull(),
+    entity: text("entity").notNull().default(""),
+    userId: text("user_id"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.session, t.event, t.entity] }),
+    index("idx_pilot_events_time").on(t.createdAt),
+  ],
+);
+export const adminEvents = sqliteTable("admin_events", {
+  id: text("id").primaryKey(),
+  actorId: text("actor_id")
+    .notNull()
+    .references(() => users.id),
+  target: text("target").notNull(),
+  action: text("action").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
